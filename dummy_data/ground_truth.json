@@ -1,5 +1,4 @@
 {
-  "rows_requested": 1000000,
   "tbl_a": {
     "row_count_dbt": 1000000,
     "row_count_abinitio": 1000000,
@@ -16,6 +15,6 @@
     "n_dropped_rows": 100,
     "n_extra_rows": 100,
     "mutated_column": "amount",
-    "colseq_mismatch": "ref_code/amount swapped at positions 1,2 in abinitio file"
+    "colseq_mismatch": "ref_code/amount swapped in abinitio file"
   }
 }

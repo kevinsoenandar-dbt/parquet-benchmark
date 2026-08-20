@@ -2,9 +2,13 @@
 {#
   Benchmarks the EXISTING approach: the Snowpark COMPARE_PARQUET_FILES proc
   reading both parquet files directly from stage and diffing via
-  pyarrow/pandas. Requires:
+  pyarrow/pandas. Requires, in order:
     - dbt run-operation create_compare_parquet_files   (deploys the proc)
-    - scripts/upload_to_stage.py already run            (files on stage)
+    - dbt run --select bench_tbl_a_dbt bench_tbl_b_dbt (builds dbt tables)
+    - dbt run-operation export_benchmark_dbt_tables    (dbt file -> stage)
+    - scripts/download_dbt_export.py                   (dbt file -> local)
+    - scripts/generate_abinitio_from_dbt_export.py      (-> abinitio file)
+    - scripts/upload_to_stage.py                        (abinitio -> stage)
 
   Writes one summary/detail row (existing shape) into bench_parquet_summary
   / bench_parquet_details per active benchmark_filelists row, and logs

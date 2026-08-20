@@ -1,7 +1,10 @@
 {% macro run_benchmark_audit_helper() %}
 {#
-  Benchmarks the PROPOSED approach: audit_helper set-based SQL comparison
-  against the tables loaded by load_benchmark_source_tables().
+  Benchmarks the PROPOSED approach: audit_helper set-based SQL comparison.
+  The dbt side (a_relation) is the real dbt model — bench_tbl_a_dbt /
+  bench_tbl_b_dbt — used directly, no file round-trip. The Ab Initio side
+  (b_relation) is loaded from its parquet file by
+  load_benchmark_source_tables(), since it only exists as a file.
 
   compare_relation_columns() output columns (confirmed against the
   dbt-labs/dbt-audit-helper source): column_name, a_ordinal_position,
@@ -29,7 +32,7 @@
     {% set query_tag = 'bench_audit_helper_' ~ table_short ~ '_' ~ modules.datetime.datetime.now().strftime('%Y%m%d%H%M%S') %}
     {% do run_query("ALTER SESSION SET QUERY_TAG = '" ~ query_tag ~ "'") %}
 
-    {% set a_relation = api.Relation.create(database=target.database, schema=target.schema, identifier='bench_' ~ table_short ~ '_dbt') %}
+    {% set a_relation = ref('bench_' ~ table_short ~ '_dbt') %}
     {% set b_relation = api.Relation.create(database=target.database, schema=target.schema, identifier='bench_' ~ table_short ~ '_abinitio') %}
 
     {% set start_ms = current_epoch_ms() %}
