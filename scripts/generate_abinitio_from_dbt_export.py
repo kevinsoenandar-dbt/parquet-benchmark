@@ -37,7 +37,33 @@ DROP_PCT = 0.0001
 EXTRA_PCT = 0.0001
 
 
-def inject_row_corruption(df: pd.DataFrame, rng: np.random.Generator, mutate_col: str):
+def resolve_col(df_or_table, name: str) -> str:
+    """Returns the actual column name matching `name` case-insensitively.
+
+    Snowflake folds unquoted identifiers to uppercase, so a dbt model that
+    writes `AS balance` actually produces a column named BALANCE — this
+    looks up whatever casing the real export used instead of assuming it.
+    """
+    names = df_or_table.columns if isinstance(df_or_table, pd.DataFrame) else df_or_table.schema.names
+    for n in names:
+        if n.lower() == name.lower():
+            return n
+    raise KeyError(f"no column matching '{name}' (case-insensitive) found in {list(names)}")
+
+
+def coerce_id_values(values, id_pa_type):
+    """Builds new id values matching whatever physical type dbt's real
+    export used for the id column — Snowflake stores integer-ish types as
+    NUMBER internally, so `id` often comes back as decimal128, not int64.
+    A bare `.astype('int64')` breaks when the target schema expects
+    decimal128, since pyarrow won't reinterpret the two byte-for-byte."""
+    if pa.types.is_decimal(id_pa_type):
+        return [Decimal(int(v)) for v in values]
+    return [int(v) for v in values]
+
+
+def inject_row_corruption(df: pd.DataFrame, rng: np.random.Generator, mutate_col: str,
+                           id_col: str, id_pa_type):
     n_rows = len(df)
     df = df.copy()
 
@@ -57,10 +83,11 @@ def inject_row_corruption(df: pd.DataFrame, rng: np.random.Generator, mutate_col
 
     n_extra = int(n_rows * EXTRA_PCT)
     extra_rows = df.sample(n=n_extra, random_state=int(rng.integers(0, 1_000_000)), replace=True).copy()
-    max_id = int(df["id"].max())
-    extra_rows["id"] = range(max_id + 1, max_id + 1 + n_extra)
-    df["id"] = df["id"].astype("int64")
-    extra_rows["id"] = extra_rows["id"].astype("int64")
+    max_id = int(df[id_col].max())
+    new_ids = range(max_id + 1, max_id + 1 + n_extra)
+
+    df[id_col] = coerce_id_values(df[id_col], id_pa_type)
+    extra_rows[id_col] = coerce_id_values(new_ids, id_pa_type)
     df = pd.concat([df, extra_rows], ignore_index=True)
 
     return df, {
@@ -91,9 +118,14 @@ def degrade_column_type(table: pa.Table, col: str):
 
 def process_tbl_a(data_dir: str, rng: np.random.Generator, ground_truth: dict):
     dbt_table = pq.read_table(os.path.join(data_dir, "dbt_tbl_a.parquet"))
-    df, stats = inject_row_corruption(dbt_table.to_pandas(), rng, mutate_col="balance")
+    df = dbt_table.to_pandas()
+    id_col = resolve_col(df, "id")
+    balance_col = resolve_col(df, "balance")
+    id_pa_type = dbt_table.schema.field(id_col).type
+
+    df, stats = inject_row_corruption(df, rng, mutate_col=balance_col, id_col=id_col, id_pa_type=id_pa_type)
     ab_table = pa.Table.from_pandas(df, schema=dbt_table.schema, preserve_index=False)
-    ab_table, coltype_note = degrade_column_type(ab_table, "balance")
+    ab_table, coltype_note = degrade_column_type(ab_table, balance_col)
     pq.write_table(ab_table, os.path.join(data_dir, "abinitio_tbl_a.parquet"))
     stats["coltype_mismatch"] = coltype_note
     ground_truth["tbl_a"] = {
@@ -105,17 +137,23 @@ def process_tbl_a(data_dir: str, rng: np.random.Generator, ground_truth: dict):
 
 def process_tbl_b(data_dir: str, rng: np.random.Generator, ground_truth: dict):
     dbt_table = pq.read_table(os.path.join(data_dir, "dbt_tbl_b.parquet"))
-    df, stats = inject_row_corruption(dbt_table.to_pandas(), rng, mutate_col="amount")
+    df = dbt_table.to_pandas()
+    id_col = resolve_col(df, "id")
+    ref_code_col = resolve_col(df, "ref_code")
+    amount_col = resolve_col(df, "amount")
+    id_pa_type = dbt_table.schema.field(id_col).type
+
+    df, stats = inject_row_corruption(df, rng, mutate_col=amount_col, id_col=id_col, id_pa_type=id_pa_type)
     ab_table = pa.Table.from_pandas(df, schema=dbt_table.schema, preserve_index=False)
 
     cols = ab_table.schema.names
-    i, j = cols.index("ref_code"), cols.index("amount")
+    i, j = cols.index(ref_code_col), cols.index(amount_col)
     new_order = list(range(len(cols)))
     new_order[i], new_order[j] = new_order[j], new_order[i]
     ab_table = ab_table.select(new_order)
 
     pq.write_table(ab_table, os.path.join(data_dir, "abinitio_tbl_b.parquet"))
-    stats["colseq_mismatch"] = "ref_code/amount swapped in abinitio file"
+    stats["colseq_mismatch"] = f"{ref_code_col}/{amount_col} swapped in abinitio file"
     ground_truth["tbl_b"] = {
         "row_count_dbt": dbt_table.num_rows,
         "row_count_abinitio": ab_table.num_rows,

@@ -31,6 +31,9 @@
     {% set pkey = row[1] %}
     {% set query_tag = 'bench_audit_helper_' ~ table_short ~ '_' ~ modules.datetime.datetime.now().strftime('%Y%m%d%H%M%S') %}
     {% do run_query("ALTER SESSION SET QUERY_TAG = '" ~ query_tag ~ "'") %}
+    {# Disable result caching so repeated runs measure real execution time,
+       not a cached answer from an identical prior query. #}
+    {% do run_query("ALTER SESSION SET USE_CACHED_RESULT = FALSE") %}
 
     {% set a_relation = ref('bench_' ~ table_short ~ '_dbt') %}
     {% set b_relation = api.Relation.create(database=target.database, schema=target.schema, identifier='bench_' ~ table_short ~ '_abinitio') %}
@@ -42,8 +45,9 @@
     {% set colseq_mismatch = namespace(n=0) %}
     {% set coltype_mismatch = namespace(n=0) %}
     {% for r in colcompare_result.rows %}
-      {% if not r['has_ordinal_position_match'] %}{% set colseq_mismatch.n = colseq_mismatch.n + 1 %}{% endif %}
-      {% if not r['has_data_type_match'] %}{% set coltype_mismatch.n = coltype_mismatch.n + 1 %}{% endif %}
+      {% set rd = row_to_lower_dict(colcompare_result, r) %}
+      {% if not rd['has_ordinal_position_match'] %}{% set colseq_mismatch.n = colseq_mismatch.n + 1 %}{% endif %}
+      {% if not rd['has_data_type_match'] %}{% set coltype_mismatch.n = coltype_mismatch.n + 1 %}{% endif %}
     {% endfor %}
 
     {% set row_compare_sql = audit_helper.compare_relations(a_relation=a_relation, b_relation=b_relation, primary_key=pkey) %}
@@ -52,9 +56,10 @@
     {% set row_count_a = namespace(n=0) %}
     {% set row_count_b = namespace(n=0) %}
     {% for r in row_compare_result.rows %}
-      {% if not (r['in_a'] and r['in_b']) %}{% set row_mismatch.n = row_mismatch.n + r['count'] %}{% endif %}
-      {% if r['in_a'] %}{% set row_count_a.n = row_count_a.n + r['count'] %}{% endif %}
-      {% if r['in_b'] %}{% set row_count_b.n = row_count_b.n + r['count'] %}{% endif %}
+      {% set rd = row_to_lower_dict(row_compare_result, r) %}
+      {% if not (rd['in_a'] and rd['in_b']) %}{% set row_mismatch.n = row_mismatch.n + rd['count'] %}{% endif %}
+      {% if rd['in_a'] %}{% set row_count_a.n = row_count_a.n + rd['count'] %}{% endif %}
+      {% if rd['in_b'] %}{% set row_count_b.n = row_count_b.n + rd['count'] %}{% endif %}
     {% endfor %}
 
     {% set elapsed = elapsed_ms_since(start_ms) %}

@@ -27,7 +27,9 @@ def main():
     try:
         cur = conn.cursor()
         for table_short in ["tbl_a", "tbl_b"]:
-            get_sql = f"GET @{args.stage}/benchmark/dbt_{table_short}.parquet file://{out_dir}/"
+            # The whole file:// URI must be single-quoted when the local path
+            # contains spaces or special characters (e.g. hyphens).
+            get_sql = f"GET @{args.stage}/benchmark/dbt_{table_short}.parquet 'file://{out_dir}/'"
             print(f"Downloading dbt_{table_short}.parquet...")
             cur.execute(get_sql)
         print(f"Done. Files saved to {out_dir}")

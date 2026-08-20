@@ -33,7 +33,10 @@
 
   {% for row in active_result.rows %}
     {% set table_short = row[1] %}
-    {% set folder = resolve_benchmark_folder(row[2]) %}
+    {# FILES entries concatenate directly onto the path with no inserted
+       separator, so the path must end in '/' or filenames glue onto the
+       last path segment (e.g. 'benchmarkabinitio_tbl_a.parquet'). #}
+    {% set folder = resolve_benchmark_folder(row[2]).rstrip('/') ~ '/' %}
     {% set filename_ab = row[3] %}
     {% set target_table = database ~ '.' ~ schema ~ '.bench_' ~ table_short ~ '_abinitio' %}
 
@@ -45,7 +48,7 @@
             INFER_SCHEMA(
               LOCATION => '{{ folder }}',
               FILE_FORMAT => '{{ file_format_fqn }}',
-              FILES => ARRAY_CONSTRUCT('{{ filename_ab }}')
+              FILES => ('{{ filename_ab }}')
             )
           )
         )

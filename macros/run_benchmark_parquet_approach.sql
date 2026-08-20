@@ -56,18 +56,21 @@
 
     {% set query_tag = 'bench_parquet_' ~ table_short ~ '_' ~ modules.datetime.datetime.now().strftime('%Y%m%d%H%M%S') %}
     {% do run_query("ALTER SESSION SET QUERY_TAG = '" ~ query_tag ~ "'") %}
+    {# Disable result caching so repeated runs measure real execution time,
+       not a cached answer from an identical prior query. #}
+    {% do run_query("ALTER SESSION SET USE_CACHED_RESULT = FALSE") %}
 
     {% set start_ms = current_epoch_ms() %}
 
     {% set call_sql %}
-      CALL {{ database }}.PRODUCT.COMPARE_PARQUET_FILES(
+      CALL {{ database }}.{{ schema }}.COMPARE_PARQUET_FILES(
           '{{ file_ab }}',
           '{{ file_dbt }}',
           {{ pkeys_sql }},
           ARRAY_CONSTRUCT(),
           {{ run_no }},
           {{ file_no }},
-          NULL,
+          TO_VARCHAR(CURRENT_DATE()),
           '{{ summary_fqn }}',
           '{{ details_fqn }}'
       )

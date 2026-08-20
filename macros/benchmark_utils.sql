@@ -63,3 +63,18 @@
   {% set result = run_query("SELECT " ~ current_epoch_ms_sql()) %}
   {{ return(result.rows[0][0] | int) }}
 {% endmacro %}
+
+
+{% macro row_to_lower_dict(result, row) %}
+{#
+  Returns `row` as a dict keyed by lowercased column name. Snowflake folds
+  unquoted SELECT aliases to uppercase (e.g. audit_helper's `AS count`
+  comes back as COUNT), so exact-case lookups like row['count'] fail —
+  this makes lookups case-insensitive instead of assuming a casing.
+#}
+  {% set d = {} %}
+  {% for col in result.column_names %}
+    {% do d.update({col.lower(): row[col]}) %}
+  {% endfor %}
+  {{ return(d) }}
+{% endmacro %}

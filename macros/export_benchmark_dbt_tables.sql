@@ -22,11 +22,21 @@
 
   {% for table_short in ['tbl_a', 'tbl_b'] %}
     {% set model_rel = ref('bench_' ~ table_short ~ '_dbt') %}
+    {# MAX_FILE_SIZE default is 16MB even in SINGLE=TRUE mode — a 1M-row
+       table exceeds that, so it must be raised explicitly (5GB is the max
+       Snowflake allows).
+
+       COPY INTO ... FROM <table_name> directly unloads with generic
+       positional column names (_COL_0, _COL_1, ...) — a SELECT wrapping
+       the table plus HEADER = TRUE is required to preserve real column
+       names in the Parquet file/metadata. #}
     {% set copy_sql %}
       COPY INTO @{{ stage_fqn }}/benchmark/dbt_{{ table_short }}.parquet
-      FROM {{ model_rel }}
+      FROM (SELECT * FROM {{ model_rel }})
       FILE_FORMAT = (TYPE = PARQUET)
+      HEADER = TRUE
       SINGLE = TRUE
+      MAX_FILE_SIZE = 5368709120
       OVERWRITE = TRUE
     {% endset %}
     {% do run_query(copy_sql) %}

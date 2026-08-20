@@ -12,12 +12,12 @@ AUTO_COMPRESS is disabled since parquet is already compressed.
 Credentials are read from environment variables only — nothing is
 hardcoded or requested interactively by this script:
     SNOWFLAKE_ACCOUNT
-    SNOWFLAKE_USER
+    SNOWFLAKE_USERNAME
     SNOWFLAKE_PASSWORD      (omit if using SNOWFLAKE_AUTHENTICATOR=externalbrowser)
     SNOWFLAKE_AUTHENTICATOR (optional, e.g. 'externalbrowser' for SSO)
     SNOWFLAKE_ROLE
     SNOWFLAKE_WAREHOUSE
-    SNOWFLAKE_DATABASE
+    SNOWFLAKE_DB
     SNOWFLAKE_SCHEMA
 
 Run: python upload_to_stage.py [--data-dir ../dummy_data]
@@ -31,17 +31,17 @@ import snowflake.connector
 
 
 def get_connection():
-    required = ["SNOWFLAKE_ACCOUNT", "SNOWFLAKE_USER", "SNOWFLAKE_WAREHOUSE",
-                "SNOWFLAKE_DATABASE", "SNOWFLAKE_SCHEMA"]
+    required = ["SNOWFLAKE_ACCOUNT", "SNOWFLAKE_USERNAME", "SNOWFLAKE_WAREHOUSE",
+                "SNOWFLAKE_DB", "SNOWFLAKE_SCHEMA"]
     missing = [v for v in required if not os.environ.get(v)]
     if missing:
         sys.exit(f"Missing required env vars: {', '.join(missing)}")
 
     kwargs = dict(
         account=os.environ["SNOWFLAKE_ACCOUNT"],
-        user=os.environ["SNOWFLAKE_USER"],
+        user=os.environ["SNOWFLAKE_USERNAME"],
         warehouse=os.environ["SNOWFLAKE_WAREHOUSE"],
-        database=os.environ["SNOWFLAKE_DATABASE"],
+        database=os.environ["SNOWFLAKE_DB"],
         schema=os.environ["SNOWFLAKE_SCHEMA"],
     )
     if os.environ.get("SNOWFLAKE_ROLE"):
@@ -72,8 +72,10 @@ def main():
         cur = conn.cursor()
         cur.execute(f"CREATE STAGE IF NOT EXISTS {args.stage}")
         for f in files:
+            # The whole file:// URI must be single-quoted when the local path
+            # contains spaces or special characters.
             put_sql = (
-                f"PUT file://{f} @{args.stage}/benchmark/ "
+                f"PUT 'file://{f}' @{args.stage}/benchmark/ "
                 "AUTO_COMPRESS=FALSE OVERWRITE=TRUE"
             )
             print(f"Uploading {os.path.basename(f)}...")
