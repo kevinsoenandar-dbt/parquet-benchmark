@@ -1,0 +1,54 @@
+version: 2
+
+models:
+  - name: parquet_run_details__collections
+    description: >
+      Line-item mismatches emitted by run_parquet_reconciliation. Joins to
+      parquet_run_summary__collections on (RunNo, FileNo). One row per detected mismatch
+      of Type ColSeq (column sequence), ColType (column datatype), or
+      ColVal (cell value — one row per differing column per matched key).
+      Detail rows per (Type, column) are capped at 15 to bound volume on
+      wildly mismatched files; summary counters are not capped.
+    columns:
+      - name: RunNo
+        description: "Run sequence — joins to parquet_run_summary."
+        data_type: INTEGER
+        data_tests:
+          - not_null
+      - name: FileNo
+        description: "FileNo from parquet_filelists — joins to parquet_run_summary."
+        data_type: INTEGER
+        data_tests:
+          - not_null
+      - name: Type
+        description: "Mismatch classification: ColSeq | ColType | ColVal."
+        data_type: VARCHAR
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ['ColSeq', 'ColType', 'ColVal']
+      - name: Type_Ref
+        description: >
+          Reference for the mismatch:
+            ColSeq  → 'pos=<i>' (position index)
+            ColType → '<column_name>'
+            ColVal  → '<column_name>' (or '<row>' when a key is missing from one side)
+        data_type: VARCHAR
+      - name: PKeys
+        description: >
+          Semicolon-separated primary key values that identify the row for
+          ColVal mismatches. NULL for ColSeq and ColType. Uses the pkey order
+          declared in the model's config.meta.primary_key.
+        data_type: VARCHAR
+      - name: FileAb_Val
+        description: >
+          Ab Initio side of the mismatch. Format varies by Type:
+            ColSeq  → column name at that position
+            ColType → pyarrow type string
+            ColVal  → the differing cell value (SQL NULL preserved), or
+                      '<row present>'/'<row missing>' when the pkey exists on
+                      only one side (Type_Ref='<row>')
+        data_type: VARCHAR
+      - name: FileDbt_Val
+        description: "dbt side of the mismatch. Same format as FileAb_Val."
+        data_type: VARCHAR

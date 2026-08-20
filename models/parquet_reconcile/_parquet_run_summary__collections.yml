@@ -1,0 +1,59 @@
+version: 2
+
+models:
+  - name: parquet_run_summary__collections
+    description: >
+      One row per (RunNo, FileNo) written by run_parquet_reconciliation.
+      Summarises the row/column/type/value mismatch counts between the
+      Ab Initio parquet (FileAb) and the dbt-produced parquet (FileDbt)
+      for each active row in parquet_filelists__collections.
+    columns:
+      - name: RunNo
+        description: "Monotonic run sequence. One RunNo per orchestrator invocation."
+        data_type: INTEGER
+        data_tests:
+          - not_null
+      - name: FileNo
+        description: "FileNo from parquet_filelists identifying the compared file pair."
+        data_type: INTEGER
+        data_tests:
+          - not_null
+      - name: Period
+        description: >
+          Business date captured for this run — sourced from the `business_date`
+          var when supplied, otherwise run_started_at. Same date used to
+          resolve {YYYYMMDD} in the FileNameAb/FileNameDbt patterns.
+        data_type: DATE
+      - name: Load_ts
+        description: "Timestamp when this summary row was inserted."
+        data_type: TIMESTAMP_NTZ
+      - name: RowCount_FileAb
+        description: "Row count in FileAb (Ab Initio parquet)."
+        data_type: INTEGER
+      - name: RowCount_FileDbt
+        description: "Row count in FileDbt (dbt-exported parquet)."
+        data_type: INTEGER
+      - name: ColCount_FileAb
+        description: "Column count in FileAb."
+        data_type: INTEGER
+      - name: ColCount_FileDbt
+        description: "Column count in FileDbt."
+        data_type: INTEGER
+      - name: ColSeq_Mismatched
+        description: "Number of positional column-name mismatches between the two files."
+        data_type: INTEGER
+      - name: ColType_Mismatched
+        description: "Number of columns whose parquet type differs between the two files."
+        data_type: INTEGER
+      - name: ColVal_Mismatched
+        description: >
+          Number of cell-level value mismatches (matched by PKeys, excluding system fields:
+          snap_d, load_ts, etl_ts, etl_actv_c, row_secu_accs_c, etl_id).
+        data_type: INTEGER
+      - name: Status
+        description: "'Pass' when all counts and comparisons match; otherwise 'Failed'."
+        data_type: VARCHAR
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ['Pass', 'Failed']

@@ -1,0 +1,3 @@
+FileNo,TableShortName,Folder,FileNameAb,FileNameDbt,PKeys,IsActive
+101,tbl_a,@{database}.{schema}.benchmark_stage/benchmark,abinitio_tbl_a.parquet,dbt_tbl_a.parquet,id,Y
+102,tbl_b,@{database}.{schema}.benchmark_stage/benchmark,abinitio_tbl_b.parquet,dbt_tbl_b.parquet,id,Y

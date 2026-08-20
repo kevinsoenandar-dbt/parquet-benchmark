@@ -1,0 +1,68 @@
+version: 2
+
+seeds:
+  - name: parquet_filelists__collections
+    description: >
+      Driver table for the PARQUET reconciliation framework.
+      Each active row (IsActive = 'Y') registers a comparison between a
+      legacy Ab Initio parquet (FileAb) and a dbt-produced parquet (FileDbt)
+      that live in the same stage folder. Folder is a stage-relative URI
+      including the sub-path; FileNameAb and FileNameDbt sit inside it.
+      All three columns support the {YYYYMMDD} token (resolved from the
+      business_date var or run_started_at) and the {database} token
+      (substituted with target.database at run time).
+    config:
+      persist_docs:
+        relation: true
+        columns: true
+      column_types:
+        FileNo: integer
+        TableShortName: varchar(64)
+        ModelName: varchar(128)
+        Folder: varchar(512)
+        FileNameAb: varchar(255)
+        FileNameDbt: varchar(255)
+        PKeys: varchar(512)
+        IsActive: varchar(1)
+    columns:
+      - name: FileNo
+        description: "Stable identifier for the registered comparison. Also joins PARQUET_RUN_SUMMARY and PARQUET_RUN_DETAILS."
+        data_tests:
+          - not_null
+          - unique
+      - name: TableShortName
+        description: "Short table name matching a branch in get_dml_columns (e.g. acct_baln)."
+        data_tests:
+          - not_null
+      - name: ModelName
+        description: "Fully qualified dbt model name whose _MODEL.yml holds config.meta.primary_key used as PKeys."
+        data_tests:
+          - not_null
+      - name: Folder
+        description: >
+          Stage-relative folder holding both files (e.g.
+          '@{database}.PRODUCT.COLLECTIONS/COLLECTIONS/bcb/acct_baln').
+          Supports {database} and {YYYYMMDD} tokens.
+        data_tests:
+          - not_null
+      - name: FileNameAb
+        description: "Ab Initio parquet file name; supports {YYYYMMDD} substitution from get_export_business_date()."
+        data_tests:
+          - not_null
+      - name: FileNameDbt
+        description: "dbt-exported parquet file name; supports {YYYYMMDD} substitution from get_export_business_date()."
+        data_tests:
+          - not_null
+      - name: PKeys
+        description: >
+          Semicolon-separated ordered primary-key column names used for
+          record-level (ColVal) comparison. E.g. 'acct_idnn_bk;acct_baln_type_c'.
+        data_tests:
+          - not_null
+      - name: IsActive
+        description: "Y = include in the next reconciliation run. N = skip."
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['Y', 'N']

@@ -1,0 +1,3 @@
+FileNo,TableShortName,ModelName,Folder,FileNameAb,FileNameDbt,PKeys,IsActive
+1,acct_baln,acct_baln__collections,@{database}.PRODUCT.COLLECTIONS/COLLECTIONS/bcb/acct_baln,omn_acct_baln_enr_bcb_{YYYYMMDD}.parquet,omn_acct_baln_enr_bcb_{YYYYMMDD}-dbt.parquet,acct_idnn_bk;acct_baln_type_c;acct_baln_tmpd_strt_s;srce_syst_c,Y
+2,acct_detl,acct_detl__collections,@{database}.PRODUCT.COLLECTIONS/COLLECTIONS/bcb/acct_detl,omn_acct_detl_enr_bcb_{YYYYMMDD}.parquet,omn_acct_detl_enr_bcb_{YYYYMMDD}-dbt.parquet,acct_idnn_bk,Y
