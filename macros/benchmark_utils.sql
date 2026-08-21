@@ -65,6 +65,41 @@
 {% endmacro %}
 
 
+{% macro current_warehouse() %}
+  {% set result = run_query("SELECT CURRENT_WAREHOUSE()") %}
+  {{ return(result.rows[0][0]) }}
+{% endmacro %}
+
+
+{% macro switch_to_benchmark_warehouse() %}
+{#
+  A stored proc has no warehouse of its own — CREATE PROCEDURE takes no
+  WAREHOUSE parameter, so its code always runs on whatever warehouse is
+  active in the calling session. This switches to the warehouse named by
+  the `snowpark_warehouse` var (e.g. a Snowpark-optimized warehouse, for
+  the memory-exhaustion case) if one is set, and returns the prior
+  warehouse name so the caller can switch back afterward. No-op (returns
+  none) if the var isn't set, so this is safe to call unconditionally.
+#}
+  {% set target_wh = var('snowpark_warehouse', none) %}
+  {% if not target_wh %}
+    {{ return(none) }}
+  {% endif %}
+  {% set original_wh = current_warehouse() %}
+  {% do run_query("USE WAREHOUSE " ~ target_wh) %}
+  {{ log("switch_to_benchmark_warehouse: switched " ~ original_wh ~ " -> " ~ target_wh, info=True) }}
+  {{ return(original_wh) }}
+{% endmacro %}
+
+
+{% macro restore_warehouse(original_wh) %}
+  {% if original_wh %}
+    {% do run_query("USE WAREHOUSE " ~ original_wh) %}
+    {{ log("restore_warehouse: switched back to " ~ original_wh, info=True) }}
+  {% endif %}
+{% endmacro %}
+
+
 {% macro row_to_lower_dict(result, row) %}
 {#
   Returns `row` as a dict keyed by lowercased column name. Snowflake folds

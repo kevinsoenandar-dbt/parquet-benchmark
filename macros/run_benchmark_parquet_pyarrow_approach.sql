@@ -1,19 +1,15 @@
-{% macro run_benchmark_parquet_approach() %}
+{% macro run_benchmark_parquet_pyarrow_approach() %}
 {#
-  Benchmarks the EXISTING approach: the Snowpark COMPARE_PARQUET_FILES proc
-  reading both parquet files directly from stage and diffing via
-  pyarrow/pandas. Requires, in order:
-    - dbt run-operation create_compare_parquet_files   (deploys the proc)
-    - dbt run --select bench_tbl_a_dbt bench_tbl_b_dbt (builds dbt tables)
-    - dbt run-operation export_benchmark_dbt_tables    (dbt file -> stage)
-    - scripts/download_dbt_export.py                   (dbt file -> local)
-    - scripts/generate_abinitio_from_dbt_export.py      (-> abinitio file)
-    - scripts/upload_to_stage.py                        (abinitio -> stage)
+  Benchmarks the PYARROW-NATIVE rewrite of the existing approach: the
+  COMPARE_PARQUET_FILES_PYARROW proc (Table.join() + pyarrow.compute
+  instead of pandas merge()+iterrows()). Identical to
+  run_benchmark_parquet_approach() except it calls the separate
+  _PYARROW proc and tags results with approach='parquet_pyarrow', so all
+  three approaches (parquet_python, parquet_pyarrow, audit_helper) can be
+  compared side by side in benchmark_runs without overwriting anything.
 
-  Writes one summary/detail row (existing shape) into bench_parquet_summary
-  / bench_parquet_details per active benchmark_filelists row, and logs
-  elapsed_ms + mismatch counts into benchmark_runs for direct comparison
-  against run_benchmark_audit_helper.
+  Requires the same setup as run_benchmark_parquet_approach(), plus:
+    - dbt run-operation create_compare_parquet_files_pyarrow (deploys this proc)
 
   A stored proc has no warehouse of its own — it runs on whatever
   warehouse is active in the session. Pass --vars '{"snowpark_warehouse":
@@ -21,8 +17,8 @@
   instead of the default target warehouse, e.g. to test past a memory
   ceiling. Omit the var to run on the default warehouse as before.
 
-  Run: dbt run-operation run_benchmark_parquet_approach
-       dbt run-operation run_benchmark_parquet_approach --args '{}' --vars '{"snowpark_warehouse": "SNOWPARK_OPT_WH"}'
+  Run: dbt run-operation run_benchmark_parquet_pyarrow_approach
+       dbt run-operation run_benchmark_parquet_pyarrow_approach --args '{}' --vars '{"snowpark_warehouse": "SNOWPARK_OPT_WH"}'
 #}
   {% if not execute %}{{ return('') }}{% endif %}
   {% do create_benchmark_runs_table() %}
@@ -62,7 +58,7 @@
     {% endfor %}
     {% set pkeys_sql = "ARRAY_CONSTRUCT(" ~ (pkeys_literals | join(', ')) ~ ")" %}
 
-    {% set query_tag = 'bench_parquet_' ~ table_short ~ '_' ~ modules.datetime.datetime.now().strftime('%Y%m%d%H%M%S') %}
+    {% set query_tag = 'bench_parquet_pyarrow_' ~ table_short ~ '_' ~ modules.datetime.datetime.now().strftime('%Y%m%d%H%M%S') %}
     {% do run_query("ALTER SESSION SET QUERY_TAG = '" ~ query_tag ~ "'") %}
     {# Disable result caching so repeated runs measure real execution time,
        not a cached answer from an identical prior query. #}
@@ -71,7 +67,7 @@
     {% set start_ms = current_epoch_ms() %}
 
     {% set call_sql %}
-      CALL {{ database }}.{{ schema }}.COMPARE_PARQUET_FILES(
+      CALL {{ database }}.{{ schema }}.COMPARE_PARQUET_FILES_PYARROW(
           '{{ file_ab }}',
           '{{ file_dbt }}',
           {{ pkeys_sql }},
@@ -95,14 +91,14 @@
     {% set r = run_query(summary_query).rows[0] %}
 
     {% do log_benchmark_run(
-          approach='parquet_python',
+          approach='parquet_pyarrow',
           table_short_name=table_short,
           row_count_a=r[0], row_count_b=r[1],
           colseq_mismatch=r[2], coltype_mismatch=r[3], row_mismatch_count=r[4],
           elapsed_ms=elapsed, query_tag=query_tag
        ) %}
 
-    {{ log("run_benchmark_parquet_approach: " ~ table_short ~ " elapsed_ms=" ~ elapsed, info=True) }}
+    {{ log("run_benchmark_parquet_pyarrow_approach: " ~ table_short ~ " elapsed_ms=" ~ elapsed, info=True) }}
   {% endfor %}
 
   {% do restore_warehouse(original_wh) %}
